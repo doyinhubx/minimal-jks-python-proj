@@ -1,9 +1,7 @@
 pipeline {
     agent any
 
-    environment {
-        WORKSPACE_DIR = "${env.WORKSPACE}"
-    }
+    environment { VENV = "venv" }
 
     stages {
         stage('Checkout') {
@@ -12,22 +10,32 @@ pipeline {
             }
         }
 
-        stage('Python Build & Test') {
+        stage('Setup Python') {
             steps {
-                // Run the Python build inside python:3.9-alpine container
-                sh """
-                docker run --rm \\
-                    -v ${WORKSPACE_DIR}:/workspace \\
-                    -w /workspace \\
-                    python:3.9-alpine sh -c "
-                        python -m venv venv && \\
-                        . venv/bin/activate && \\
-                        pip install --upgrade pip && \\
-                        pip install flake8 && \\
-                        flake8 . && \\
-                        python -m unittest discover -s tests
-                    "
-                """
+                sh '''
+                python3 -m venv $VENV
+                . $VENV/bin/activate
+                pip install --upgrade pip
+                pip install flake8
+                '''
+            }
+        }
+
+        stage('Lint') {
+            steps {
+                sh '''
+                . $VENV/bin/activate
+                flake8 .
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                . $VENV/bin/activate
+                python -m unittest discover -s tests
+                '''
             }
         }
 
@@ -40,8 +48,8 @@ pipeline {
 
     post {
         always {
-            echo 'Cleaning up virtual environment (if any)...'
-            sh 'rm -rf venv || true'
+            echo 'Cleaning up virtual environment...'
+            sh 'rm -rf $VENV'
         }
         success {
             echo 'Build succeeded!'
